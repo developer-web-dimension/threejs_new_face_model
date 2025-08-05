@@ -20,6 +20,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      font-family: Arial, sans-serif;
     }
     
     .container {
@@ -37,40 +38,77 @@
       z-index: 1;
       max-width: 100vw;
       max-height: 100vh;
-      object-fit: contain;
     }
     
     video {
       display: none;
     }
 
-    /* Mobile optimizations */
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 18px;
+      z-index: 10;
+      text-align: center;
+    }
+
+    .debug-info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 12px;
+      z-index: 20;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 5px;
+      max-width: 300px;
+    }
+
+    /* Responsive styles */
     @media screen and (max-width: 768px) {
       canvas {
+        object-fit: cover !important;
         width: 100vw !important;
         height: 100vh !important;
-        object-fit: cover;
+      }
+      
+      .container {
+        overflow: hidden;
+      }
+    }
+
+    @media screen and (max-height: 600px) and (orientation: landscape) {
+      canvas {
+        height: 100vh !important;
+        width: auto !important;
+        object-fit: cover !important;
       }
     }
 
     @media screen and (orientation: portrait) {
       canvas {
-        object-fit: cover;
+        object-fit: cover !important;
       }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <video autoplay playsinline id="video"></video>
+    <video autoplay playsinline muted id="video"></video>
+    <div class="loading" id="loading">Loading camera and AI model...</div>
+    <div class="debug-info" id="debug" style="display: none;"></div>
   </div>
 
   <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.skypack.dev/three@0.150.1",
-        "three/": "https://cdn.skypack.dev/three@0.150.1/"
+        "three": "https://unpkg.com/three@0.150.1/build/three.module.js",
+        "three/": "https://unpkg.com/three@0.150.1/"
       }
     }
   </script>
@@ -79,6 +117,8 @@
     import * as THREE from "three";
     import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
     import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+    import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader";
+    import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
     import {
       FilesetResolver,
       FaceLandmarker
@@ -109,8 +149,10 @@
       constructor() {
         this.lastTime = 0;
         this.callbacks = [];
+        this.videoElement = null;
+        this.inputFramesPlane = null;
         
-        // Get responsive dimensions
+        // Initialize dimensions
         this.updateDimensions();
         
         // Set up the Three.js scene, camera, and renderer
@@ -122,70 +164,177 @@
           5000
         );
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        this.renderer.setSize(this.width, this.height);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        THREE.ColorManagement.legacy = false;
-        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        
-        // Make canvas responsive
-        this.renderer.domElement.style.width = '100%';
-        this.renderer.domElement.style.height = '100%';
-        document.querySelector('.container').appendChild(this.renderer.domElement);
-
-        // Set up the basic lighting for the scene
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        this.scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        directionalLight.position.set(0, 1, 0);
-        this.scene.add(directionalLight);
-
-        // Set up the camera position and controls
-        this.camera.position.z = 0;
-
-        // Add a video background
-        const video = document.getElementById("video");
-        const inputFrameTexture = new THREE.VideoTexture(video);
-        if (!inputFrameTexture) {
-          throw new Error("Failed to get the 'input_frame' texture!");
-        }
-        inputFrameTexture.colorSpace = THREE.SRGBColorSpace;
-        const inputFramesDepth = 500;
-        const inputFramesPlane = createCameraPlaneMesh(
-          this.camera,
-          inputFramesDepth,
-          new THREE.MeshBasicMaterial({ map: inputFrameTexture })
-        );
-        this.scene.add(inputFramesPlane);
-
-        // Render the scene
-        this.render();
-
-        window.addEventListener("resize", this.resize.bind(this));
-        window.addEventListener("orientationchange", () => {
-          setTimeout(() => this.resize(), 100);
+        this.renderer = new THREE.WebGLRenderer({ 
+          antialias: true,
+          alpha: true,
+          powerPreference: "high-performance"
         });
+        
+        this.setupRenderer();
+        this.setupLighting();
+        this.setupCamera();
+        
+        // Add resize listeners
+        this.setupEventListeners();
+        
+        // Start render loop
+        this.render();
       }
 
       updateDimensions() {
-        const aspectRatio = 1280 / 720; // Camera aspect ratio
-        const windowAspect = window.innerWidth / window.innerHeight;
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+      }
+
+      setupRenderer() {
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.setClearColor(0x000000, 1); // Ensure black background
         
-        if (windowAspect > aspectRatio) {
-          // Window is wider than camera feed
-          this.height = window.innerHeight;
-          this.width = this.height * aspectRatio;
+        const canvas = this.renderer.domElement;
+        canvas.style.display = 'block';
+        canvas.style.position = 'absolute';
+        canvas.style.top = '50%';
+        canvas.style.left = '50%';
+        canvas.style.transform = 'translate(-50%, -50%) scaleX(-1)';
+        canvas.style.objectFit = 'cover';
+        canvas.style.maxWidth = '100vw';
+        canvas.style.maxHeight = '100vh';
+        
+        document.querySelector('.container').appendChild(canvas);
+      }
+
+      setupLighting() {
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        this.scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        directionalLight.position.set(0, 1, 1);
+        this.scene.add(directionalLight);
+      }
+
+      setupCamera() {
+        this.camera.position.z = 0;
+      }
+
+      setupVideoBackground(videoElement) {
+        this.videoElement = videoElement;
+        
+        // Remove existing video plane if it exists
+        if (this.inputFramesPlane) {
+          this.scene.remove(this.inputFramesPlane);
+        }
+        
+        // Wait for video to have actual dimensions
+        if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+          console.log("Video not ready yet, retrying...");
+          setTimeout(() => this.setupVideoBackground(videoElement), 100);
+          return;
+        }
+        
+        console.log(`Video dimensions: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
+        
+        const inputFrameTexture = new THREE.VideoTexture(videoElement);
+        inputFrameTexture.colorSpace = THREE.SRGBColorSpace;
+        inputFrameTexture.generateMipmaps = false;
+        inputFrameTexture.minFilter = THREE.LinearFilter;
+        inputFrameTexture.magFilter = THREE.LinearFilter;
+        inputFrameTexture.wrapS = THREE.ClampToEdgeWrapping;
+        inputFrameTexture.wrapT = THREE.ClampToEdgeWrapping;
+        
+        // Calculate proper aspect ratios to prevent stretching
+        const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+        const viewportAspect = this.width / this.height;
+        
+        // Use a larger depth to ensure video background is behind everything
+        const inputFramesDepth = 1000;
+        const viewportSize = getViewportSizeAtDepth(this.camera, inputFramesDepth);
+        
+        let planeWidth, planeHeight;
+        
+        // Calculate plane dimensions to maintain video aspect ratio while filling viewport
+        if (videoAspect > viewportAspect) {
+          // Video is wider than viewport - fit to height, crop width
+          planeHeight = viewportSize.height;
+          planeWidth = planeHeight * videoAspect;
         } else {
-          // Window is taller than camera feed
-          this.width = window.innerWidth;
-          this.height = this.width / aspectRatio;
+          // Video is taller than viewport - fit to width, crop height
+          planeWidth = viewportSize.width;
+          planeHeight = planeWidth / videoAspect;
         }
         
-        // On mobile, use full screen
-        if (window.innerWidth <= 768) {
-          this.width = window.innerWidth;
-          this.height = window.innerHeight;
+        // Create plane geometry with calculated dimensions
+        const cameraPlaneGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+        cameraPlaneGeometry.translate(0, 0, -inputFramesDepth);
+        
+        this.inputFramesPlane = new THREE.Mesh(
+          cameraPlaneGeometry,
+          new THREE.MeshBasicMaterial({ 
+            map: inputFrameTexture,
+            side: THREE.DoubleSide
+          })
+        );
+        
+        this.scene.add(this.inputFramesPlane);
+        console.log("Video background plane created and added to scene");
+        console.log(`Plane dimensions: ${planeWidth.toFixed(2)}x${planeHeight.toFixed(2)}`);
+        console.log(`Video aspect: ${videoAspect.toFixed(2)}, Viewport aspect: ${viewportAspect.toFixed(2)}`);
+        
+        // Update debug info
+        this.updateDebugInfo();
+      }
+
+      updateDebugInfo() {
+        const debug = document.getElementById('debug');
+        if (debug && this.videoElement) {
+          const videoAspect = this.videoElement.videoWidth / this.videoElement.videoHeight;
+          const viewportAspect = this.width / this.height;
+          
+          debug.innerHTML = `
+            Video: ${this.videoElement.videoWidth}x${this.videoElement.videoHeight}<br>
+            Canvas: ${this.width}x${this.height}<br>
+            Video Aspect: ${videoAspect.toFixed(2)}<br>
+            Viewport Aspect: ${viewportAspect.toFixed(2)}<br>
+            Playing: ${!this.videoElement.paused}<br>
+            Time: ${this.videoElement.currentTime.toFixed(1)}s
+          `;
+          debug.style.display = 'block';
         }
+      }
+
+      setupEventListeners() {
+        let resizeTimeout;
+        
+        const handleResize = () => {
+          clearTimeout(resizeTimeout);
+          resizeTimeout = setTimeout(() => {
+            this.resize();
+          }, 100);
+        };
+
+        window.addEventListener("resize", handleResize);
+        window.addEventListener("orientationchange", () => {
+          setTimeout(handleResize, 300);
+        });
+        
+        // Handle visibility changes to optimize performance
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            this.paused = true;
+          } else {
+            this.paused = false;
+            this.render();
+          }
+        });
+
+        // Add click to toggle debug info
+        window.addEventListener('click', () => {
+          const debug = document.getElementById('debug');
+          if (debug) {
+            debug.style.display = debug.style.display === 'none' ? 'block' : 'none';
+          }
+        });
       }
 
       resize() {
@@ -197,22 +346,28 @@
         this.renderer.setSize(this.width, this.height);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-        // Update canvas style for responsiveness
-        this.renderer.domElement.style.width = '100%';
-        this.renderer.domElement.style.height = '100%';
+        // Update video background if it exists
+        if (this.videoElement && this.inputFramesPlane) {
+          this.setupVideoBackground(this.videoElement);
+        }
 
         this.renderer.render(this.scene, this.camera);
       }
 
       render(time = this.lastTime) {
+        if (this.paused) return;
+        
         const delta = (time - this.lastTime) / 1000;
         this.lastTime = time;
+        
         // Call all registered callbacks with deltaTime parameter
         for (const callback of this.callbacks) {
           callback(delta);
         }
+        
         // Render the scene
         this.renderer.render(this.scene, this.camera);
+        
         // Request next frame
         requestAnimationFrame((t) => this.render(t));
       }
@@ -224,61 +379,137 @@
         this.morphTargetMeshes = [];
         this.url = url;
         this.scene = scene;
-        this.loadModel(this.url);
+        this.setupLoaders().then(() => {
+          this.loadModel(this.url);
+        });
+      }
+
+      async setupLoaders() {
+        // Setup KTX2 loader for compressed textures
+        const ktx2Loader = new KTX2Loader();
+        ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.150.1/examples/jsm/libs/basis/');
+        this.loader.setKTX2Loader(ktx2Loader);
+
+        // Setup Draco loader for compressed geometry
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath('https://unpkg.com/three@0.150.1/examples/jsm/libs/draco/');
+        this.loader.setDRACOLoader(dracoLoader);
+
+        // Setup Meshopt decoder for additional compression
+        try {
+          const { MeshoptDecoder } = await import('https://unpkg.com/three@0.150.1/examples/jsm/libs/meshopt_decoder.module.js');
+          this.loader.setMeshoptDecoder(MeshoptDecoder);
+          console.log("MeshoptDecoder loaded successfully");
+        } catch (error) {
+          console.warn("MeshoptDecoder failed to load:", error);
+        }
       }
 
       loadModel(url) {
         this.url = url;
+        console.log("Attempting to load model from:", url);
+        
         this.loader.load(
-          // URL of the model you want to load
           url,
-          // Callback when the resource is loaded
           (gltf) => {
             if (this.gltf) {
-              // Reset GLTF and morphTargetMeshes if a previous model was loaded.
-              this.gltf.scene.remove();
+              this.scene.remove(this.gltf.scene);
               this.morphTargetMeshes = [];
             }
             this.gltf = gltf;
-            console.log();
+            
+            console.log("Model loaded successfully:", gltf);
+            
             this.scene.add(gltf.scene);
+            
+            // Scale and position the model
+            gltf.scene.scale.setScalar(1.0);
+            gltf.scene.position.set(0, 0, -100); // Move model closer to camera
+            
             this.init(gltf);
+            console.log("Avatar model loaded and added to scene successfully");
           },
-
-          // Called while loading is progressing
-          (progress) =>
-            console.log(
-              "Loading model...",
-              100.0 * (progress.loaded / progress.total),
-              "%"
-            ),
-          // Called when loading has errors
-          (error) => console.error(error)
+          (progress) => {
+            const percent = Math.round(100.0 * (progress.loaded / progress.total));
+            console.log(`Loading avatar model... ${percent}%`);
+          },
+          (error) => {
+            console.error("Error loading avatar model:", error);
+            console.error("Failed URL:", url);
+            
+            // Try to create a simple fallback geometry
+            this.createFallbackModel();
+          }
         );
       }
 
+      createFallbackModel() {
+        console.log("Creating fallback model...");
+        
+        // Create a simple sphere as fallback
+        const geometry = new THREE.SphereGeometry(50, 32, 32);
+        const material = new THREE.MeshLambertMaterial({ color: 0x888888 });
+        const sphere = new THREE.Mesh(geometry, material);
+        sphere.position.set(0, 0, -200);
+        
+        this.scene.add(sphere);
+        
+        // Hide loading message
+        const loading = document.getElementById("loading");
+        if (loading) {
+          loading.textContent = "Using fallback model (sphere)";
+          loading.style.color = "yellow";
+          setTimeout(() => {
+            loading.style.display = "none";
+          }, 2000);
+        }
+        
+        console.log("Fallback model created");
+      }
+
       init(gltf) {
+        console.log("Initializing model...");
+        
         gltf.scene.traverse((object) => {
-          // Register first bone found as the root
           if (object.isBone && !this.root) {
             this.root = object;
-            console.log(object);
+            console.log("Found root bone:", object);
           }
-          // Return early if no mesh is found.
-          if (!object.isMesh) {
-            return;
-          }
+          
+          if (!object.isMesh) return;
 
           const mesh = object;
-          // Reduce clipping when model is close to camera.
           mesh.frustumCulled = false;
-
-          // Return early if mesh doesn't include morphable targets
-          if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) {
-            return;
+          
+          console.log("Processing mesh:", mesh.name);
+          console.log("Mesh has morphTargetDictionary:", !!mesh.morphTargetDictionary);
+          console.log("Mesh has morphTargetInfluences:", !!mesh.morphTargetInfluences);
+          
+          if (mesh.morphTargetDictionary) {
+            console.log("Morph targets:", Object.keys(mesh.morphTargetDictionary));
+            
+            if (mesh.material) {
+              mesh.material.morphTargets = true;
+              mesh.material.needsUpdate = true;
+              // mesh.material.colorWrite = false;
+            }
+            
+            if (!mesh.morphTargetInfluences) {
+              mesh.morphTargetInfluences = new Array(Object.keys(mesh.morphTargetDictionary).length).fill(0);
+            }
+            
+            this.morphTargetMeshes.push(mesh);
           }
-          this.morphTargetMeshes.push(mesh);
         });
+        
+        console.log("Model initialization complete");
+        console.log("Total morph target meshes:", this.morphTargetMeshes.length);
+        
+        // Hide loading message once model is ready
+        const loading = document.getElementById("loading");
+        if (loading) {
+          loading.style.display = "none";
+        }
       }
 
       updateBlendshapes(blendshapes) {
@@ -286,171 +517,249 @@
           if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) {
             continue;
           }
+          
           for (const [name, value] of blendshapes) {
-            if (!Object.keys(mesh.morphTargetDictionary).includes(name)) {
+            if (!mesh.morphTargetDictionary.hasOwnProperty(name)) {
               continue;
             }
 
             const idx = mesh.morphTargetDictionary[name];
-            mesh.morphTargetInfluences[idx] = value;
+            let finalValue = Math.max(0, Math.min(1, value));
+            
+            if (name.includes('eyeBlink') || name.includes('browOuter')) {
+              finalValue = Math.min(1, finalValue * 1.2);
+            }
+            
+            mesh.morphTargetInfluences[idx] = finalValue;
           }
+          
+          mesh.morphTargetInfluences.needsUpdate = true;
         }
       }
 
       applyMatrix(matrix, matrixRetargetOptions) {
-        const { decompose = false, scale = 1 } = matrixRetargetOptions || {};
-        if (!this.gltf) {
-          return;
-        }
+        const { scale = 1 } = matrixRetargetOptions || {};
+        if (!this.gltf) return;
 
         matrix.scale(new THREE.Vector3(scale, scale, scale));
         this.gltf.scene.matrixAutoUpdate = false;
-        // Set new position and rotation from matrix
         this.gltf.scene.matrix.copy(matrix);
-      }
-
-      offsetRoot(offset, rotation) {
-        if (this.root) {
-          this.root.position.copy(offset);
-          if (rotation) {
-            let offsetQuat = new THREE.Quaternion().setFromEuler(
-              new THREE.Euler(rotation.x, rotation.y, rotation.z)
-            );
-            this.root.quaternion.copy(offsetQuat);
-          }
-        }
       }
     }
 
     let faceLandmarker;
     let video;
+    let isModelReady = false;
 
     const scene = new BasicScene();
-    // Change this path to your local model file
-    const avatar = new Avatar(
-      "https://assets.codepen.io/9177687/raccoon_head.glb",
-      scene.scene
-    );
+    
+    // Use a more reliable model URL or create fallback
+    // const modelUrl = "https://models.readyplayer.me/64bfa15f0e72c63f7c8b0b1b.glb"; // Example Ready Player Me model
+    const modelUrl = "./models/face.glb"; // Your original model
+    
+    const avatar = new Avatar(modelUrl, scene.scene);
 
     function detectFaceLandmarks(time) {
-      if (!faceLandmarker) {
-        return;
-      }
-      const landmarks = faceLandmarker.detectForVideo(video, time);
+      if (!faceLandmarker || !isModelReady) return;
+      
+      try {
+        const landmarks = faceLandmarker.detectForVideo(video, time);
 
-      // Apply transformation
-      const transformationMatrices = landmarks.facialTransformationMatrixes;
-      if (transformationMatrices && transformationMatrices.length > 0) {
-        let matrix = new THREE.Matrix4().fromArray(transformationMatrices[0].data);
-        // Example of applying matrix directly to the avatar
-        avatar.applyMatrix(matrix, { scale: 40 });
-      }
+        // Apply transformation matrix
+        const transformationMatrices = landmarks.facialTransformationMatrixes;
+        if (transformationMatrices && transformationMatrices.length > 0) {
+          const matrix = new THREE.Matrix4().fromArray(transformationMatrices[0].data);
+          avatar.applyMatrix(matrix, { scale: 10 });
+        }
 
-      // Apply Blendshapes
-      const blendshapes = landmarks.faceBlendshapes;
-      if (blendshapes && blendshapes.length > 0) {
-        const coefsMap = retarget(blendshapes);
-        avatar.updateBlendshapes(coefsMap);
+        // Apply blendshapes
+        const blendshapes = landmarks.faceBlendshapes;
+        if (blendshapes && blendshapes.length > 0) {
+          const coefsMap = retarget(blendshapes);
+          avatar.updateBlendshapes(coefsMap);
+        }
+      } catch (error) {
+        console.warn("Face detection error:", error);
       }
     }
 
     function retarget(blendshapes) {
       const categories = blendshapes[0].categories;
-      let coefsMap = new Map();
-      for (let i = 0; i < categories.length; ++i) {
-        const blendshape = categories[i];
-        // Adjust certain blendshape values to be less prominent.
-        switch (blendshape.categoryName) {
-          case "browOuterUpLeft":
-            blendshape.score *= 1.2;
-            break;
-          case "browOuterUpRight":
-            blendshape.score *= 1.2;
-            break;
+      const coefsMap = new Map();
+      
+      for (const blendshape of categories) {
+        const categoryName = blendshape.categoryName;
+        let score = blendshape.score;
+        let mappedName = null;
+        
+        switch (categoryName) {
           case "eyeBlinkLeft":
-            blendshape.score *= 1.2;
+            mappedName = "eyeBlink_L";
+            score *= 1.2;
             break;
           case "eyeBlinkRight":
-            blendshape.score *= 1.2;
+            mappedName = "eyeBlink_R";
+            score *= 1.2;
+            break;
+          case "eyeSquintLeft":
+            mappedName = "eyeSquint_L";
+            break;
+          case "eyeSquintRight":
+            mappedName = "eyeSquint_R";
+            break;
+          case "eyeWideLeft":
+            mappedName = "eyeWide_L";
+            break;
+          case "eyeWideRight":
+            mappedName = "eyeWide_R";
+            break;
+          case "browInnerUp":
+            mappedName = "browInnerUp";
+            score *= 1.2;
+            break;
+          case "browDownLeft":
+            mappedName = "browDown_L";
+            break;
+          case "browDownRight":
+            mappedName = "browDown_R";
+            break;
+          case "browOuterUpLeft":
+            mappedName = "browOuterUp_L";
+            score *= 1.2;
+            break;
+          case "browOuterUpRight":
+            mappedName = "browOuterUp_R";
+            score *= 1.2;
+            break;
+          case "mouthSmileLeft":
+            mappedName = "mouthSmile_L";
+            break;
+          case "mouthSmileRight":
+            mappedName = "mouthSmile_R";
+            break;
+          case "mouthFrownLeft":
+            mappedName = "mouthFrown_L";
+            break;
+          case "mouthFrownRight":
+            mappedName = "mouthFrown_R";
+            break;
+          case "jawOpen":
+            mappedName = "jawOpen";
             break;
           default:
+            mappedName = categoryName;
+            break;
         }
-        coefsMap.set(categories[i].categoryName, categories[i].score);
+        
+        if (mappedName) {
+          coefsMap.set(mappedName, score);
+        }
       }
+      
       return coefsMap;
     }
 
     function onVideoFrame(time) {
-      // Do something with the frame.
       detectFaceLandmarks(time);
-      // Re-register the callback to be notified about the next frame.
-      video.requestVideoFrameCallback(onVideoFrame);
+      if (video && !video.paused) {
+        video.requestVideoFrameCallback(onVideoFrame);
+      }
     }
 
-    // Stream webcam into landmarker loop (and also make video visible)
     async function streamWebcamThroughFaceLandmarker() {
       video = document.getElementById("video");
-
+      
       function onAcquiredUserMedia(stream) {
         video.srcObject = stream;
         video.onloadedmetadata = () => {
-          video.play();
+          console.log(`Video loaded: ${video.videoWidth}x${video.videoHeight}`);
+          video.play().then(() => {
+            console.log("Video started playing");
+            scene.setupVideoBackground(video);
+            
+            // Start face detection after a short delay
+            setTimeout(() => {
+              video.requestVideoFrameCallback(onVideoFrame);
+            }, 500);
+          });
         };
       }
 
       try {
-        // Get optimal video constraints based on screen size
-        const isMobile = window.innerWidth <= 768;
-        const videoConstraints = {
-          facingMode: "user",
-          width: { ideal: isMobile ? 640 : 1280 },
-          height: { ideal: isMobile ? 480 : 720 },
-          frameRate: { ideal: 30, max: 60 }
-        };
-
-        const evt = await navigator.mediaDevices.getUserMedia({
+        console.log("Requesting camera access...");
+        
+        const constraints = {
           audio: false,
-          video: videoConstraints
-        });
-        onAcquiredUserMedia(evt);
-        video.requestVideoFrameCallback(onVideoFrame);
-      } catch (e) {
-        console.error(`Failed to acquire camera feed: ${e}`);
-        // Fallback to basic constraints
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+            frameRate: { ideal: 30 }
+          }
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        onAcquiredUserMedia(stream);
+        
+      } catch (error) {
+        console.error("Camera access failed:", error);
+        
+        // Try with simpler constraints
         try {
-          const evt = await navigator.mediaDevices.getUserMedia({
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({
             audio: false,
-            video: true
+            video: { facingMode: "user" }
           });
-          onAcquiredUserMedia(evt);
-          video.requestVideoFrameCallback(onVideoFrame);
+          onAcquiredUserMedia(fallbackStream);
         } catch (fallbackError) {
-          console.error(`Fallback camera access failed: ${fallbackError}`);
+          console.error("Fallback camera access failed:", fallbackError);
+          const loading = document.getElementById("loading");
+          if (loading) {
+            loading.textContent = "Camera access denied. Please allow camera access and refresh.";
+            loading.style.color = "red";
+          }
         }
       }
     }
 
     async function run() {
-      await streamWebcamThroughFaceLandmarker();
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.1.0-alpha-16/wasm"
-      );
-      faceLandmarker = await FaceLandmarker.createFromModelPath(
-        vision,
-        "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
-      );
-      await faceLandmarker.setOptions({
-        baseOptions: {
-          delegate: "GPU"
-        },
-        runningMode: "VIDEO",
-        outputFaceBlendshapes: true,
-        outputFacialTransformationMatrixes: true
-      });
+      try {
+        console.log("Starting application...");
+        
+        // Initialize MediaPipe first
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.1.0-alpha-16/wasm"
+        );
+        
+        faceLandmarker = await FaceLandmarker.createFromModelPath(
+          vision,
+          "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
+        );
+        
+        await faceLandmarker.setOptions({
+          baseOptions: { delegate: "GPU" },
+          runningMode: "VIDEO",
+          outputFaceBlendshapes: true,
+          outputFacialTransformationMatrixes: true
+        });
 
-      console.log("Finished Loading MediaPipe Model.");
+        isModelReady = true;
+        console.log("MediaPipe Face Landmarker initialized successfully");
+        
+        // Start camera stream
+        await streamWebcamThroughFaceLandmarker();
+        
+      } catch (error) {
+        console.error("Initialization error:", error);
+        const loading = document.getElementById("loading");
+        if (loading) {
+          loading.textContent = "Failed to initialize. Check console for details.";
+          loading.style.color = "red";
+        }
+      }
     }
 
+    // Start the application
     run();
   </script>
 </body>
