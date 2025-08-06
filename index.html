@@ -436,34 +436,8 @@
             console.error("Error loading avatar model:", error);
             console.error("Failed URL:", url);
             
-            // Try to create a simple fallback geometry
-            this.createFallbackModel();
           }
         );
-      }
-
-      createFallbackModel() {
-        console.log("Creating fallback model...");
-        
-        // Create a simple sphere as fallback
-        const geometry = new THREE.SphereGeometry(50, 32, 32);
-        const material = new THREE.MeshLambertMaterial({ color: 0x888888 });
-        const sphere = new THREE.Mesh(geometry, material);
-        sphere.position.set(0, 0, -200);
-        
-        this.scene.add(sphere);
-        
-        // Hide loading message
-        const loading = document.getElementById("loading");
-        if (loading) {
-          loading.textContent = "Using fallback model (sphere)";
-          loading.style.color = "yellow";
-          setTimeout(() => {
-            loading.style.display = "none";
-          }, 2000);
-        }
-        
-        console.log("Fallback model created");
       }
 
       init(gltf) {
@@ -489,8 +463,11 @@
             
             if (mesh.material) {
               mesh.material.morphTargets = true;
-              // mesh.material.colorWrite = false; // Commented out so you can see the face model
+              mesh.material.colorWrite = false; 
               mesh.material.needsUpdate = true;
+              mesh.material.transparent = true;
+              mesh.material.depthWrite = true;
+              mesh.material.depthTest = true;
             }
             
             if (!mesh.morphTargetInfluences) {
@@ -610,7 +587,7 @@
           glassesMatrix.scale(new THREE.Vector3(glassesScale, glassesScale, glassesScale));
           
           // Offset glasses to sit on nose bridge
-          const localOffset = new THREE.Vector3(0, 0.2, 0.6); // Move down and forward slightly
+          const localOffset = new THREE.Vector3(0, 0.2, 0.4); // Move down and forward slightly
           localOffset.multiplyScalar(scale);
           
           // Apply rotation to offset so it moves with face rotation
