@@ -431,7 +431,6 @@
           },
           (progress) => {
             const percent = Math.round(100.0 * (progress.loaded / progress.total));
-            console.log(`Loading avatar model... ${percent}%`);
           },
           (error) => {
             console.error("Error loading avatar model:", error);
@@ -490,8 +489,8 @@
             
             if (mesh.material) {
               mesh.material.morphTargets = true;
+              // mesh.material.colorWrite = false; // Commented out so you can see the face model
               mesh.material.needsUpdate = true;
-              // mesh.material.colorWrite = false;
             }
             
             if (!mesh.morphTargetInfluences) {
@@ -539,11 +538,91 @@
 
       applyMatrix(matrix, matrixRetargetOptions) {
         const { scale = 1 } = matrixRetargetOptions || {};
-        if (!this.gltf) return;
+        
+        // Apply to main face model
+        if (this.gltf) {
+          const faceMatrix = matrix.clone();
+          faceMatrix.scale(new THREE.Vector3(scale, scale, scale));
+          this.gltf.scene.matrixAutoUpdate = false;
+          this.gltf.scene.matrix.copy(faceMatrix);
+        }
+      }
+    }
 
-        matrix.scale(new THREE.Vector3(scale, scale, scale));
-        this.gltf.scene.matrixAutoUpdate = false;
-        this.gltf.scene.matrix.copy(matrix);
+    class SimpleGlasses {
+      constructor(scene) {
+        this.loader = new GLTFLoader();
+        this.scene = scene;
+        this.glassesModel = null;
+        this.loadGlasses("./models/normal_glasses.glb");
+      }
+
+      loadGlasses(url) {
+        console.log("Loading glasses model from:", url);
+        
+        this.loader.load(
+          url,
+          (gltf) => {
+            this.glassesModel = gltf;
+            this.scene.add(gltf.scene);
+            
+            // Position glasses same as face model
+            gltf.scene.scale.setScalar(1.0); // Same scale as face
+            gltf.scene.position.set(0, 0, -100); // Same position as face
+            
+            gltf.scene.traverse((object) => {
+              if (object.isMesh && object.material) {
+                // Make glasses visible with a dark color
+                object.material.transparent = false;
+                object.material.opacity = 1.0;
+                object.material.color = new THREE.Color(0x222222); // Dark gray
+                object.material.needsUpdate = true;
+              }
+            });
+            
+            console.log("Simple glasses model loaded and positioned successfully");
+          },
+          (progress) => {
+            const percent = Math.round(100.0 * (progress.loaded / progress.total));
+          },
+          (error) => {
+            console.error("Error loading glasses model:", error);
+            console.error("Make sure the glasses model exists at:", url);
+          }
+        );
+      }
+
+      // Method to apply the same transformation as the face
+      applyMatrix(matrix, matrixRetargetOptions) {
+        const { scale = 1 } = matrixRetargetOptions || {};
+        
+        if (this.glassesModel) {
+          const glassesMatrix = matrix.clone();
+          
+          // Extract position and rotation from face matrix
+          const position = new THREE.Vector3();
+          const rotation = new THREE.Quaternion();
+          const faceScale = new THREE.Vector3();
+          matrix.decompose(position, rotation, faceScale);
+          
+          // Apply glasses-specific transformations
+          const glassesScale = scale * 1.0; // Same scale as face
+          glassesMatrix.scale(new THREE.Vector3(glassesScale, glassesScale, glassesScale));
+          
+          // Offset glasses to sit on nose bridge
+          const localOffset = new THREE.Vector3(0, 0.2, 0.6); // Move down and forward slightly
+          localOffset.multiplyScalar(scale);
+          
+          // Apply rotation to offset so it moves with face rotation
+          localOffset.applyQuaternion(rotation);
+          
+          // Set final position
+          const finalPosition = position.clone().add(localOffset);
+          glassesMatrix.setPosition(finalPosition);
+          
+          this.glassesModel.scene.matrixAutoUpdate = false;
+          this.glassesModel.scene.matrix.copy(glassesMatrix);
+        }
       }
     }
 
@@ -553,11 +632,11 @@
 
     const scene = new BasicScene();
     
-    // Use a more reliable model URL or create fallback
-    // const modelUrl = "https://models.readyplayer.me/64bfa15f0e72c63f7c8b0b1b.glb"; // Example Ready Player Me model
-    const modelUrl = "./models/face.glb"; // Your original model
-    
+    const modelUrl = "./models/face.glb"; 
     const avatar = new Avatar(modelUrl, scene.scene);
+    
+    // Add simple glasses that will just show on screen
+    const glasses = new SimpleGlasses(scene.scene);
 
     function detectFaceLandmarks(time) {
       if (!faceLandmarker || !isModelReady) return;
@@ -565,11 +644,12 @@
       try {
         const landmarks = faceLandmarker.detectForVideo(video, time);
 
-        // Apply transformation matrix
+        // Apply transformation matrix to both face and glasses
         const transformationMatrices = landmarks.facialTransformationMatrixes;
         if (transformationMatrices && transformationMatrices.length > 0) {
           const matrix = new THREE.Matrix4().fromArray(transformationMatrices[0].data);
           avatar.applyMatrix(matrix, { scale: 10 });
+          glasses.applyMatrix(matrix, { scale: 10 }); // Apply same transformation to glasses
         }
 
         // Apply blendshapes
@@ -759,7 +839,6 @@
       }
     }
 
-    // Start the application
     run();
   </script>
 </body>
