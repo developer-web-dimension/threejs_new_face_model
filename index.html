@@ -13,14 +13,287 @@
     
     body {
       margin: 0;
-      background-color: black;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #2a2a2a 100%);
       overflow: hidden;
       width: 100vw;
       height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: Arial, sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      position: relative;
+    }
+    
+    /* Animated background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        linear-gradient(rgba(196, 65, 217, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(196, 65, 217, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      animation: gridMove 20s linear infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+    
+    @keyframes gridMove {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(50px, 50px); }
+    }
+    
+    /* Splashscreen Styles */
+    .splashscreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+    }
+    
+    .splashscreen.fade-out {
+      opacity: 0;
+      transform: scale(1.1);
+    }
+    
+    .splash-logo {
+      width: 120px;
+      height: 120px;
+      /* background: linear-gradient(45deg, #00d4ff, #ff6b6b, #4ecdc4); */
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 30px;
+      box-shadow: 0 20px 40px rgba(0, 212, 255, 0.3);
+      animation: pulse 2s infinite ease-in-out;
+      padding: 15px;
+    }
+    
+    .splash-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: brightness(1.1) contrast(1.1);
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    @keyframes blink {
+      0%, 90%, 100% { opacity: 1; }
+      95% { opacity: 0.3; }
+    }
+    
+    .splash-title {
+      color: white;
+      font-size: 32px;
+      font-weight: 300;
+      margin-bottom: 15px;
+      text-align: center;
+      opacity: 0;
+      animation: fadeInUp 1s 0.5s forwards;
+    }
+    
+    .splash-subtitle {
+      color: #888;
+      font-size: 16px;
+      text-align: center;
+      opacity: 0;
+      animation: fadeInUp 1s 0.8s forwards;
+    }
+    
+    .splash-progress {
+      margin-top: 40px;
+      width: 200px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    
+    .splash-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #00d4ff, #ff6b6b);
+      border-radius: 2px;
+      width: 0%;
+      animation: progressLoad 4.5s ease-out forwards;
+    }
+    
+    @keyframes progressLoad {
+      0% { width: 0%; }
+      100% { width: 100%; }
+    }
+    
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    /* Enhanced corner branding with premium styling */
+    .corner-branding {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 100;
+      opacity: 0;
+      transform: translateY(30px) scale(0.9);
+      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: rgb(255, 255, 255);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(196, 65, 217, 0.2);
+      border-radius: 24px;
+      padding: 16px 20px;
+      box-shadow: 
+        0 12px 40px rgba(0, 0, 0, 0.4),
+        0 4px 12px rgba(196, 65, 217, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      user-select: none;
+    }
+    .corner-branding:active {
+      opacity: 0;
+    }
+    .corner-branding.show {
+      transform: translateY(0) scale(1) !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+      display: flex !important;
+      pointer-events: auto;
+    }
+    
+    .corner-branding:hover {
+      transform: translateY(-6px) scale(1.02);
+      background: rgb(249, 249, 249);
+      border-color: rgb(255, 255, 255);
+      box-shadow: 
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 8px 20px rgba(196, 65, 217, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+    
+    .corner-branding::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-radius: 24px;
+      background: white;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    
+    .corner-branding:hover::before {
+      opacity: 1;
+    }
+    
+    .corner-logo {
+      width: 65px;
+      height: 65px;
+      /* background: linear-gradient(135deg, #c441d9 0%, #9c27b0 50%, #673ab7 100%); */
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      padding: 1px;
+      position: relative;
+      overflow: hidden;
+      pointer-events: none !important;
+      /* box-shadow: 
+        0 4px 12px rgb(255, 255, 255),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2); */
+    }
+    
+    .corner-logo::before {
+      content: '';
+      position: absolute;
+      top: -20%;
+      left: -20%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, 
+        transparent 30%, 
+        rgba(255, 255, 255, 0.3) 50%, 
+        transparent 70%);
+      transform: translateX(-100%) translateY(-100%) rotate(45deg);
+      transition: transform 0.6s ease;
+    }
+    
+    .corner-branding:hover .corner-logo::before {
+      transform: translateX(100%) translateY(100%) rotate(45deg);
+    }
+    
+    .corner-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      /* filter: brightness(1.3) contrast(1.2) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); */
+      position: relative;
+      z-index: 1;
+      transition: transform 0.3s ease;
+    }
+    
+    .corner-branding:hover .corner-logo img {
+      transform: scale(1.1) rotate(5deg);
+    }
+    
+    .corner-text {
+      color: black;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.3;
+      /* text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); */
+      white-space: nowrap;
+      pointer-events: none !important;
+    }
+    
+    .corner-text .brand {
+      display: block;
+      font-size: 10px;
+      color: rgb(0, 0, 0);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 3px;
+      font-weight: 600;
+      pointer-events: none !important;
+    }
+    
+    .corner-text .company {
+      display: block;
+      font-weight: 700;
+      font-size: 16px;
+      background: linear-gradient(135deg, #c441d9 0%, #9c27b0 50%, #673ab7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: none;
+      pointer-events: none !important;
     }
     
     .container {
@@ -36,10 +309,11 @@
       position: absolute;
       transform: scaleX(-1);
       z-index: 1;
+      box-shadow: 0 0 30px rgba(121, 53, 53, 0.3);
       max-width: 100vw;
       max-height: 100vh;
     }
-    
+   
     video {
       display: none;
     }
@@ -79,6 +353,38 @@
       .container {
         overflow: hidden;
       }
+      
+      .splash-title {
+        font-size: 24px;
+      }
+      
+      .corner-branding {
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 16px;
+        gap: 12px;
+        border-radius: 20px;
+      }
+      
+      .corner-logo {
+        width: 44px;
+        height: 44px;
+        padding: 1px;
+        border-radius: 12px;
+      }
+      
+      .corner-text {
+        font-size: 11px;
+      }
+      
+      .corner-text .brand {
+        font-size: 9px;
+        letter-spacing: 0.5px;
+      }
+      
+      .corner-text .company {
+        font-size: 16px;
+      }
     }
 
     @media screen and (max-height: 600px) and (orientation: landscape) {
@@ -97,10 +403,39 @@
   </style>
 </head>
 <body>
+  <!-- Splashscreen -->
+  <div class="splashscreen" id="splashscreen">
+    <div class="splash-logo">
+      <img src="./models/logo.png" alt="Logo" />
+    </div>
+    <h1 class="splash-title">Face Tracker</h1>
+    <p class="splash-subtitle">Powered by Web Dimension</p>
+    <div class="splash-progress">
+      <div class="splash-progress-bar"></div>
+    </div>
+  </div>
+  
+  <!-- Corner Branding -->
+   <a href="https://www.instagram.com/web_dimesion?igsh=MWtyczFvNDZlMTg5NA==" target="_blank" >
+  <div class="corner-branding" id="cornerBranding" title="Web Dimension" >
+    <div class="corner-logo">
+      <img src="./models/logo.png" alt="Web Dimension Logo" />
+    </div>
+    <div class="corner-text">
+      <span class="brand" style="color:black">Powered by</span>
+      <span class="company" style="color:black">Web Dimension</span>
+    </div>
+  </div>
+  </a>
+
+  <!-- Floating Particles -->
+  <div class="particles" id="particles"></div>
+  
+  <!-- Main Content -->
   <div class="container">
     <video autoplay playsinline muted id="video"></video>
     <div class="loading" id="loading">Loading camera and AI model...</div>
-    <div class="debug-info" id="debug" style="display: none;"></div>
+    <!-- <div class="debug-info" id="debug" style="display: none;"></div> -->
   </div>
 
   <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
@@ -123,6 +458,62 @@
       FilesetResolver,
       FaceLandmarker
     } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.1.0-alpha-16";
+
+    // Enhanced splashscreen management
+    function hideSplashscreen() {
+      const splashscreen = document.getElementById('splashscreen');
+      const cornerBranding = document.getElementById('cornerBranding');
+      
+      splashscreen.classList.add('fade-out');
+      
+      setTimeout(() => {
+        splashscreen.style.display = 'none';
+        // Show corner branding after splashscreen disappears
+        setTimeout(() => {
+          cornerBranding.classList.add('show');
+          createParticles();
+        }, 200);
+      }, 800);
+    }
+    cornerBranding.classList.remove('hide');
+   document.getElementById('cornerBranding').addEventListener('click', () => {
+    console.log('Clicked cornerBranding:', cornerBranding.classList);
+  });
+
+    // Enhanced particle system with better performance
+    function createParticles() {
+      const particlesContainer = document.getElementById('particles');
+      const particleCount = 12;
+      
+      for (let i = 0; i < particleCount; i++) {
+        setTimeout(() => {
+          const particle = document.createElement('div');
+          particle.className = 'particle';
+          particle.style.left = Math.random() * 100 + '%';
+          particle.style.animationDelay = Math.random() * 8 + 's';
+          particle.style.animationDuration = (6 + Math.random() * 6) + 's';
+          
+          // Add random horizontal drift
+          const drift = (Math.random() - 0.5) * 100;
+          particle.style.setProperty('--drift', drift + 'px');
+          
+          particlesContainer.appendChild(particle);
+          
+          // Remove particle after animation completes
+          setTimeout(() => {
+            if (particle.parentNode) {
+              particle.parentNode.removeChild(particle);
+            }
+          }, 12000);
+        }, i * 600);
+      }
+      
+      // Continuously create new particles
+      setTimeout(createParticles, 8000);
+    }
+
+    // Hide splashscreen after 5 seconds
+    setTimeout(hideSplashscreen, 5000);
 
     function getViewportSizeAtDepth(camera, depth) {
       const viewportHeightAtDepth =
@@ -436,8 +827,34 @@
             console.error("Error loading avatar model:", error);
             console.error("Failed URL:", url);
             
+            // Try to create a simple fallback geometry
+            this.createFallbackModel();
           }
         );
+      }
+
+      createFallbackModel() {
+        console.log("Creating fallback model...");
+        
+        // Create a simple sphere as fallback
+        const geometry = new THREE.SphereGeometry(50, 32, 32);
+        const material = new THREE.MeshLambertMaterial({ color: 0x888888 });
+        const sphere = new THREE.Mesh(geometry, material);
+        sphere.position.set(0, 0, -200);
+        
+        this.scene.add(sphere);
+        
+        // Hide loading message
+        const loading = document.getElementById("loading");
+        if (loading) {
+          loading.textContent = "Using fallback model (sphere)";
+          loading.style.color = "yellow";
+          setTimeout(() => {
+            loading.style.display = "none";
+          }, 2000);
+        }
+        
+        console.log("Fallback model created");
       }
 
       init(gltf) {
@@ -463,11 +880,8 @@
             
             if (mesh.material) {
               mesh.material.morphTargets = true;
-              mesh.material.colorWrite = false; 
+              // mesh.material.colorWrite = false; // Commented out so you can see the face model
               mesh.material.needsUpdate = true;
-              mesh.material.transparent = true;
-              mesh.material.depthWrite = true;
-              mesh.material.depthTest = true;
             }
             
             if (!mesh.morphTargetInfluences) {
@@ -524,85 +938,15 @@
           this.gltf.scene.matrix.copy(faceMatrix);
         }
       }
-    }
 
-    class SimpleGlasses {
-      constructor(scene) {
-        this.loader = new GLTFLoader();
-        this.scene = scene;
-        this.glassesModel = null;
-        this.loadGlasses("./models/normal_glasses.glb");
-      }
-
-      loadGlasses(url) {
-        console.log("Loading glasses model from:", url);
-        
-        this.loader.load(
-          url,
-          (gltf) => {
-            this.glassesModel = gltf;
-            this.scene.add(gltf.scene);
-            
-            // Position glasses same as face model
-            gltf.scene.scale.setScalar(1.0); // Same scale as face
-            gltf.scene.position.set(0, 0, -100); // Same position as face
-            
-            gltf.scene.traverse((object) => {
-              if (object.isMesh && object.material) {
-                // Make glasses visible with a dark color
-                object.material.transparent = false;
-                object.material.opacity = 1.0;
-                object.material.color = new THREE.Color(0x222222); // Dark gray
-                object.material.needsUpdate = true;
-              }
-            });
-            
-            console.log("Simple glasses model loaded and positioned successfully");
-          },
-          (progress) => {
-            const percent = Math.round(100.0 * (progress.loaded / progress.total));
-          },
-          (error) => {
-            console.error("Error loading glasses model:", error);
-            console.error("Make sure the glasses model exists at:", url);
-          }
-        );
-      }
-
-      // Method to apply the same transformation as the face
-      applyMatrix(matrix, matrixRetargetOptions) {
-        const { scale = 1 } = matrixRetargetOptions || {};
-        
-        if (this.glassesModel) {
-          const glassesMatrix = matrix.clone();
-          
-          // Extract position and rotation from face matrix
-          const position = new THREE.Vector3();
-          const rotation = new THREE.Quaternion();
-          const faceScale = new THREE.Vector3();
-          matrix.decompose(position, rotation, faceScale);
-          
-          // Apply glasses-specific transformations
-          const glassesScale = scale * 1.0; // Same scale as face
-          glassesMatrix.scale(new THREE.Vector3(glassesScale, glassesScale, glassesScale));
-          
-          // Offset glasses to sit on nose bridge
-          const localOffset = new THREE.Vector3(0, 0.2, 0.4); // Move down and forward slightly
-          localOffset.multiplyScalar(scale);
-          
-          // Apply rotation to offset so it moves with face rotation
-          localOffset.applyQuaternion(rotation);
-          
-          // Set final position
-          const finalPosition = position.clone().add(localOffset);
-          glassesMatrix.setPosition(finalPosition);
-          
-          this.glassesModel.scene.matrixAutoUpdate = false;
-          this.glassesModel.scene.matrix.copy(glassesMatrix);
-        }
+      setVisible(visible) {
+      if (this.gltf && this.gltf.scene) {
+        this.gltf.scene.visible = visible;
       }
     }
 
+    }
+    
     let faceLandmarker;
     let video;
     let isModelReady = false;
@@ -612,8 +956,7 @@
     const modelUrl = "./models/face.glb"; 
     const avatar = new Avatar(modelUrl, scene.scene);
     
-    // Add simple glasses that will just show on screen
-    const glasses = new SimpleGlasses(scene.scene);
+
 
     function detectFaceLandmarks(time) {
       if (!faceLandmarker || !isModelReady) return;
@@ -621,22 +964,32 @@
       try {
         const landmarks = faceLandmarker.detectForVideo(video, time);
 
-        // Apply transformation matrix to both face and glasses
-        const transformationMatrices = landmarks.facialTransformationMatrixes;
-        if (transformationMatrices && transformationMatrices.length > 0) {
+        // Check if any face is detected
+        const hasFace = landmarks.facialTransformationMatrixes && 
+                      landmarks.facialTransformationMatrixes.length > 0;
+        
+        if (hasFace) {
+          // Show the avatar model
+          avatar.setVisible(true);
+          
+          const transformationMatrices = landmarks.facialTransformationMatrixes;
           const matrix = new THREE.Matrix4().fromArray(transformationMatrices[0].data);
           avatar.applyMatrix(matrix, { scale: 10 });
-          glasses.applyMatrix(matrix, { scale: 10 }); // Apply same transformation to glasses
-        }
 
-        // Apply blendshapes
-        const blendshapes = landmarks.faceBlendshapes;
-        if (blendshapes && blendshapes.length > 0) {
-          const coefsMap = retarget(blendshapes);
-          avatar.updateBlendshapes(coefsMap);
+          // Apply blendshapes
+          const blendshapes = landmarks.faceBlendshapes;
+          if (blendshapes && blendshapes.length > 0) {
+            const coefsMap = retarget(blendshapes);
+            avatar.updateBlendshapes(coefsMap);
+          }
+        } else {
+          // Hide the avatar model when no face is detected
+          avatar.setVisible(false);
         }
       } catch (error) {
         console.warn("Face detection error:", error);
+        // Hide avatar on error as well
+        avatar.setVisible(false);
       }
     }
 
